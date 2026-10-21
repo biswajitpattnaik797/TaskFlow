@@ -196,8 +196,6 @@ The issue was resolved by configuring Gunicorn with two workers and four threads
 For a larger production application, an API gateway or a different communication design could reduce this dependency.
 
 The application is intentionally small. Independent horizontal scaling is demonstrated as a technical capability rather than a current business necessity.
-```
-
 
 ### 3.8 Benefits, Challenges and Security Considerations
 
