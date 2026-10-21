@@ -263,6 +263,20 @@ CPU and memory requests and limits are also configured.
 
 MongoDB authentication and additional production security controls are not yet implemented.
 
+### Kubernetes Health Monitoring
+
+Both Task Service and Statistics Service have Kubernetes readiness and liveness probes configured.
+
+- Readiness probes check whether the application is ready to receive requests.
+- Liveness probes check whether the application is responding and allow Kubernetes to restart unhealthy containers.
+- Both probes use the `/api/health` endpoint.
+- Task Service health checks run on port 5002.
+- Statistics Service health checks run on port 5001.
+
+Readiness checks run every 10 seconds, while liveness checks run every 20 seconds.
+
+These health endpoints verify HTTP responsiveness but do not check database or downstream service connectivity.
+
 ## 12. Testing and Verification
 
 The following functionality has been tested:
@@ -311,7 +325,6 @@ TaskFlow/
 - The application does not provide user authentication.
 - The dashboard uses a synchronous REST communication pattern between microservices.
 - The current deployment is intended for a local learning environment rather than public production use.
-- Kubernetes readiness and liveness probes have not yet been configured.
 
 ## 15. Conclusion
 
