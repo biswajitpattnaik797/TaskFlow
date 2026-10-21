@@ -12,6 +12,7 @@ services:
       - "127.0.0.1:5003:5002"
     environment:
       MONGO_URI: mongodb://mongodb:27017/
+      STATISTICS_SERVICE_URL: http://statistics-service:5001/api/statistics
     depends_on:
       - mongodb
     networks:
