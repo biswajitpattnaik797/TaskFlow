@@ -1,0 +1,35 @@
+services:
+  mongodb:
+    image: mongo:7
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - taskflow-network
+
+  task-service:
+    build: ./task-service
+    ports:
+      - "127.0.0.1:5003:5002"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/
+    depends_on:
+      - mongodb
+    networks:
+      - taskflow-network
+
+  statistics-service:
+    build: ./statistics-service
+    ports:
+      - "127.0.0.1:5004:5001"
+    environment:
+      TASK_SERVICE_URL: http://task-service:5002/api/tasks
+    depends_on:
+      - task-service
+    networks:
+      - taskflow-network
+
+volumes:
+  mongodb-data:
+
+networks:
+  taskflow-network:

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow - Task Management</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f6f9;
+        color: #253047;
+        margin: 0;
+        padding: 30px;
+        line-height: 1.6;
+    }
+
+    h1 {
+        color: #2563eb;
+        font-size: 36px;
+        margin-bottom: 5px;
+    }
+
+    h2 {
+        color: #1e293b;
+        margin-top: 30px;
+    }
+
+    form, #statistics, #task-list {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        margin-bottom: 20px;
+    }
+
+    input, select, button {
+        padding: 10px;
+        margin: 5px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    input {
+        min-width: 200px;
+    }
+
+    button {
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #1d4ed8;
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    #task-list > div {
+        padding: 15px;
+        margin-bottom: 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+
+    #task-list h3 {
+        margin-top: 0;
+        margin-bottom: 8px;
+    }
+
+    #statistics {
+        font-weight: 600;
+        color: #2563eb;
+    }
+
+    @media (max-width: 600px) {
+        body {
+            padding: 15px;
+        }
+
+        input, select, button {
+            width: 100%;
+            margin: 5px 0;
+        }
+    }
+</style>
+</head>
+<body>
+    <h1>TaskFlow</h1>
+    <p>Simple Task Management Application</p>
+
+    <h2>Create New Task</h2>
+    <form id="task-form">
+        <input type="text" id="title" placeholder="Task title" required>
+        <input type="text" id="description" placeholder="Description">
+
+        <select id="priority">
+            <option value="Low">Low Priority</option>
+            <option value="Medium">Medium Priority</option>
+            <option value="High">High Priority</option>
+        </select>
+
+        <button type="submit">Create Task</button>
+    </form>
+
+    <h2>Task Statistics</h2>
+    <div id="statistics">Loading statistics...</div>
+
+    <h2>My Tasks</h2>
+    <div id="task-list">Loading tasks...</div>
+
+<script>
+    async function loadTasks() {
+        const taskList = document.getElementById("task-list");
+
+        try {
+            const response = await fetch("/api/tasks");
+
+            if (!response.ok) {
+                throw new Error("Failed to retrieve tasks");
+            }
+
+            const data = await response.json();
+
+            taskList.innerHTML = "";
+
+            if (data.tasks.length === 0) {
+                taskList.textContent = "No tasks available.";
+                return;
+            }
+
+            data.tasks.forEach(task => {
+                const taskItem = document.createElement("div");
+
+                const title = document.createElement("h3");
+                title.textContent = task.title;
+
+                const details = document.createElement("p");
+                details.textContent =
+                    `Priority: ${task.priority} | Status: ${task.status}`;
+
+                const statusDropdown = document.createElement("select");
+
+		["To Do", "In Progress", "Done"].forEach(status => {
+    		const option = document.createElement("option");
+    		option.value = status;
+    		option.textContent = status;
+    		statusDropdown.appendChild(option);
+		});
+
+	    statusDropdown.value = task.status;
+
+	    statusDropdown.addEventListener("change", async function() {
+    	    const newStatus = statusDropdown.value;
+    	    statusDropdown.disabled = true;
+
+	    try {
+        	const response = await fetch(`/api/tasks/${task.id}`, {
+           	 method: "PUT",
+            	headers: {
+                "Content-Type": "application/json"
+            	},
+            	body: JSON.stringify({
+                status: newStatus
+            	})
+        	});
+
+        	if (!response.ok) {
+            	throw new Error("Failed to update task status");
+        	}
+
+       		await loadTasks();
+        	await loadStatistics();
+
+    	} catch (error) {
+        	statusDropdown.value = task.status;
+        	statusDropdown.disabled = false;
+        	alert("Unable to update task status.");
+        	console.error(error);
+    	}
+});
+
+const deleteButton = document.createElement("button");
+deleteButton.textContent = "Delete Task";
+
+deleteButton.addEventListener("click", async function() {
+    const confirmed = confirm(
+        `Are you sure you want to delete "${task.title}"?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    deleteButton.disabled = true;
+
+    try {
+        const response = await fetch(`/api/tasks/${task.id}`, {
+            method: "DELETE"
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to delete task");
+        }
+
+        await loadTasks();
+        await loadStatistics();
+
+    } catch (error) {
+        deleteButton.disabled = false;
+        alert("Unable to delete task.");
+        console.error(error);
+    }
+});
+	taskItem.appendChild(title);
+	taskItem.appendChild(details);
+	taskItem.appendChild(statusDropdown);
+	taskItem.appendChild(deleteButton);
+	taskList.appendChild(taskItem);
+            });
+
+        } catch (error) {
+            taskList.textContent = "Unable to load tasks.";
+            console.error(error);
+        }
+    }
+
+document.getElementById("task-form").addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    const title = document.getElementById("title").value.trim();
+    const description = document.getElementById("description").value.trim();
+    const priority = document.getElementById("priority").value;
+
+    try {
+        const response = await fetch("/api/tasks", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                title: title,
+                description: description,
+                priority: priority,
+                status: "To Do"
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to create task");
+        }
+
+        document.getElementById("task-form").reset();
+        await loadTasks();
+	await loadStatistics();
+
+        alert("Task created successfully!");
+
+    } catch (error) {
+        alert("Unable to create task. Please try again.");
+        console.error(error);
+    }
+});
+
+async function loadStatistics() {
+    const statistics = document.getElementById("statistics");
+
+    try {
+        const response = await fetch("/api/dashboard/statistics");
+
+        if (!response.ok) {
+            throw new Error("Failed to retrieve statistics");
+        }
+
+        const data = await response.json();
+
+        statistics.textContent =
+            `Total Tasks: ${data.total_tasks} | ` +
+            `To Do: ${data.to_do} | ` +
+            `In Progress: ${data.in_progress} | ` +
+            `Done: ${data.done} | ` +
+            `Completion: ${data.completion_percentage}%`;
+
+    } catch (error) {
+        statistics.textContent = "Unable to load statistics.";
+        console.error(error);
+    }
+}
+
+loadStatistics();
+    loadTasks();
+</script>
+</body>
+</html>
