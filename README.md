@@ -25,43 +25,299 @@ Users can create, view, update and delete tasks through a browser-based dashboar
 
 ## 3. Application Architecture
 
-TaskFlow consists of two application microservices and one database.
+### 3.1 Architecture Overview
 
-### Task Service
+TaskFlow follows a microservices-based architecture. The application is divided into two independent application services and a MongoDB database.
 
-Responsible for:
-- Creating tasks
-- Retrieving tasks
-- Updating task information and status
-- Deleting tasks
-- Providing the browser-based dashboard
-- Forwarding dashboard statistics requests
+Each microservice has a specific responsibility and communicates with other services through REST APIs.
 
-### Statistics Service
+The application runs in Docker containers and is deployed using Kubernetes.
 
-Responsible for:
-- Retrieving task information through the Task Service REST API
-- Calculating task statistics
-- Returning statistics as JSON
+### 3.2 Architecture Diagram
 
-### MongoDB
+```text
+                  +----------------------+
+                  |     Web Browser      |
+                  |   TaskFlow Dashboard |
+                  +----------+-----------+
+                             |
+                             | HTTP Requests
+                             v
+                  +----------------------+
+                  |     Task Service     |
+                  |   Flask REST API     |
+                  |      Port 5002       |
+                  +----------+-----------+
+                             |
+                 +-----------+-----------+
+                 |                       |
+                 | MongoDB               | HTTP REST
+                 | Connection            | Request
+                 v                       v
+        +------------------+   +----------------------+
+        |     MongoDB      |   |  Statistics Service  |
+        |    Port 27017    |   |    Flask REST API    |
+        |                  |   |      Port 5001       |
+        +------------------+   +----------+-----------+
+                                          |
+                                          | GET /api/tasks
+                                          v
+                                   Task Service
+```
 
-Stores task information persistently.
+The browser communicates with the Task Service, which provides the user interface and task management functionality.
 
-The Statistics Service does not access MongoDB directly. It communicates with the Task Service through REST APIs.
+When statistics are requested, the Task Service forwards the request to the Statistics Service. The Statistics Service retrieves task information through the Task Service REST API and calculates the statistics.
 
-### Communication Flow
+### 3.3 Software Components and Responsibilities
 
-Browser Dashboard
-    |
-    v
-Task Service
-    |
-    +----> MongoDB
-    |
-    +----> Statistics Service
-                 |
-                 +----> Task Service REST API
+**Task Service**
+
+The Task Service manages task-related operations.
+
+Its responsibilities include:
+- Creating, retrieving, updating and deleting tasks.
+- Providing REST API endpoints.
+- Communicating with MongoDB.
+- Serving the browser-based dashboard.
+- Forwarding statistics requests to the Statistics Service.
+
+**Statistics Service**
+
+The Statistics Service handles calculations related to task progress.
+
+Its responsibilities include:
+- Retrieving tasks through the Task Service REST API.
+- Counting tasks based on their status.
+- Calculating the completion percentage.
+- Returning calculated statistics as JSON.
+
+**MongoDB**
+
+MongoDB stores the application's task data.
+
+It runs separately from the application services and uses persistent storage in Kubernetes.
+
+### 3.4 Mapping Software Components to Microservices
+
+| Software Component | Implementation | Deployment |
+|-------------------|----------------|------------|
+| User interface | HTML, CSS, JavaScript | Task Service |
+| Task management | Python Flask | Task Service |
+| Statistics calculation | Python Flask | Statistics Service |
+| Data storage | MongoDB | MongoDB StatefulSet |
+
+Each application microservice has its own Docker image and Kubernetes Deployment.
+
+MongoDB is deployed separately using a StatefulSet.
+
+### 3.5 Architecture Design Principles
+
+**Separation of Responsibilities**
+
+Each microservice focuses on a specific function.
+
+The Task Service manages task information, while the Statistics Service calculates statistics.
+
+**REST-Based Communication**
+
+The microservices communicate through HTTP REST APIs.
+
+The Statistics Service retrieves task information from the Task Service rather than connecting directly to MongoDB.
+
+This keeps database access within the Task Service.
+
+**Independent Deployment and Scaling**
+
+Both application microservices have separate Kubernetes Deployments.
+
+This allows them to be deployed and scaled independently.
+
+For example, additional Statistics Service replicas can be introduced without increasing the number of Task Service replicas.
+
+**Containerization**
+
+Docker packages each microservice with its application code and dependencies.
+
+This provides a consistent execution environment across Docker Compose and Kubernetes.
+
+**Persistent Storage**
+
+MongoDB uses a Kubernetes PersistentVolumeClaim to retain task data when its pod is recreated.
+
+### 3.6 Architecture Decisions and Trade-offs
+
+**Why Microservices?**
+
+Microservices allow different application responsibilities to be separated.
+
+This improves modularity and demonstrates independent deployment and scaling.
+
+However, microservices also introduce additional networking, configuration and operational complexity compared with a single application.
+
+**Why REST APIs?**
+
+REST APIs provide a simple and widely supported communication method.
+
+They allow the Statistics Service to retrieve task information without accessing the database directly.
+
+However, synchronous REST communication creates dependencies between services.
+
+**Why Kubernetes?**
+
+Kubernetes manages container deployment, service discovery, scaling and health monitoring.
+
+It also supports persistent storage and resource management.
+
+For a small application like TaskFlow, Kubernetes introduces more complexity than is strictly necessary. It is used here to demonstrate cloud-native deployment principles.
+
+**Why MongoDB?**
+
+MongoDB stores task information as documents, which fits the structure of the task data.
+
+The application uses a single MongoDB instance because database scaling is not required for this project.
+
+### 3.7 Current Architecture Limitations
+
+The current dashboard statistics request follows this sequence:
+
+1. The browser requests statistics from the Task Service.
+2. The Task Service calls the Statistics Service.
+3. The Statistics Service calls the Task Service to retrieve tasks.
+4. The Task Service retrieves data from MongoDB.
+5. The Statistics Service calculates the results and returns them.
+
+This creates a circular synchronous request dependency.
+
+During development, the Task Service initially used a single synchronous Gunicorn worker, causing statistics requests to time out.
+
+The issue was resolved by configuring Gunicorn with two workers and four threads per worker.
+
+For a larger production application, an API gateway or a different communication design could reduce this dependency.
+
+The application is intentionally small. Independent horizontal scaling is demonstrated as a technical capability rather than a current business necessity.
+```
+
+
+### 3.8 Benefits, Challenges and Security Considerations
+
+#### Benefits of the Architecture
+
+**Independent Development and Deployment**
+
+TaskFlow separates task management and statistics calculations into two microservices.
+
+This makes it possible to update or deploy one service without necessarily changing the other.
+
+**Independent Scaling**
+
+Kubernetes allows the Task Service and Statistics Service to scale independently.
+
+For example, if statistics calculations become more demanding, additional Statistics Service replicas can be deployed without scaling the entire application.
+
+In the current project, the workload is small, so scaling is demonstrated mainly to show the technical capability.
+
+**Maintainability**
+
+Each microservice has a clearly defined responsibility.
+
+This makes the code easier to understand, test and maintain compared with having all functionality in one large application.
+
+**Portability**
+
+Docker packages the application and its dependencies into containers.
+
+The same application can run using Docker Compose or Kubernetes, reducing differences between development and deployment environments.
+
+**Reliability**
+
+Kubernetes readiness and liveness probes help detect unhealthy application containers.
+
+Persistent MongoDB storage also ensures that task data can survive database pod recreation.
+
+#### Challenges and Mitigation
+
+**1. Communication Between Microservices**
+
+TaskFlow uses synchronous REST communication.
+
+The Statistics Service depends on the Task Service to retrieve task information.
+
+During development, a circular request dependency caused HTTP 503 errors when the Task Service used a single synchronous Gunicorn worker.
+
+Mitigation:
+- Configured Gunicorn with two workers and four threads per worker.
+- Added request timeouts and error handling.
+- Used Kubernetes Service names for internal communication.
+
+For a larger system, an API gateway or redesigned communication flow could reduce these dependencies.
+
+**2. Increased Deployment Complexity**
+
+Microservices require separate Docker images, Kubernetes Deployments, Services and environment configurations.
+
+Mitigation:
+- Used Docker Compose for local development.
+- Used Kubernetes YAML files for repeatable deployments.
+- Documented deployment commands in the README.
+
+**3. Database Availability**
+
+The Task Service depends on MongoDB.
+
+If MongoDB becomes unavailable, task management operations may fail.
+
+Mitigation:
+- Used a Kubernetes StatefulSet.
+- Configured persistent storage.
+- Verified that task data survives MongoDB pod recreation.
+
+Persistent storage protects against pod recreation but does not replace database backups or high availability.
+
+**4. Resource Consumption**
+
+Multiple containers require more resources than a simple standalone application.
+
+Mitigation:
+- Configured CPU and memory requests and limits.
+- Used lightweight Python container images.
+- Kept the application deployment small.
+
+#### Security Considerations
+
+Both application microservices use Kubernetes security settings:
+
+- Run as non-root user 10001.
+- Prevent privilege escalation.
+- Drop unnecessary Linux capabilities.
+- Use the RuntimeDefault seccomp profile.
+
+These settings reduce the privileges available to application containers.
+
+However, the application still has security limitations:
+
+- MongoDB authentication is not configured.
+- Users are not required to authenticate.
+- Internal REST communication does not use TLS.
+- Kubernetes NetworkPolicies are not configured.
+- Automated security scanning is not implemented.
+
+For production use, these limitations should be addressed through authentication, encrypted communication, network restrictions, secrets management and security scanning.
+
+#### Business Implications
+
+A microservices architecture can provide business value when different application components have different workloads or development requirements.
+
+Independent scaling can reduce unnecessary resource consumption when only one service needs additional capacity.
+
+Independent deployment can also allow teams to release changes without redeploying the entire application.
+
+However, microservices introduce additional operational costs related to networking, monitoring, deployment and maintenance.
+
+For a small application like TaskFlow, a monolithic architecture would probably be simpler and less expensive.
+
+Microservices were selected primarily to demonstrate cloud-native architecture principles, rather than because the current workload requires them.
+
 
 ## 4. REST API Endpoints
 
